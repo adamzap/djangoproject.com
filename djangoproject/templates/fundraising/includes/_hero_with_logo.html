@@ -7,7 +7,7 @@
         src="{{ obj.thumbnail.url }}"
         loading="lazy"
         alt="{% blocktranslate trimmed with company_name=obj.display_name %}
-          Logo of company {{ company_name }}{% endblocktranslate %}"
+               Logo of company {{ company_name }}{% endblocktranslate %}"
       >
     {% else %}
       <img src="{% static 'img/fundraising-heart.svg' %}" alt="{% translate 'Pixelated heart logo' %}">

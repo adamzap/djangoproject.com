@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
 from django.forms.models import modelformset_factory
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -154,11 +154,15 @@ def manage_donations(request, hero):
 
 @require_POST
 def update_card(request):
-    donation = get_object_or_404(Donation, id=request.POST["donation_id"])
+    stripe_token = request.POST.get("stripe_token")
+    if not stripe_token:
+        raise Http404
+    hero = get_object_or_404(DjangoHero, pk=request.POST.get("hero"))
+    donation = get_object_or_404(hero.donation_set, id=request.POST.get("donation_id"))
     try:
         stripe.Customer.modify(
             donation.stripe_customer_id,
-            source=request.POST["stripe_token"],
+            source=stripe_token,
         )
     except stripe.StripeError as e:
         data = {"success": False, "error": str(e)}

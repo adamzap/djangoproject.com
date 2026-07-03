@@ -201,6 +201,76 @@ class TestCampaign(ReleaseMixin, TemporaryMediaRootMixin, TestCase):
         self.assertFalse(retrieve_customer.called)
 
 
+class TestUpdateCard(ReleaseMixin, TestCase):
+    def setUp(self):
+        self.url = reverse("fundraising:update-card")
+
+    @patch("stripe.Customer.modify")
+    def test_update_card(self, modify_customer):
+        hero = DjangoHero.objects.create(stripe_customer_id="cus_owner")
+        donation = Donation.objects.create(donor=hero, stripe_customer_id="cus_owner")
+        response = self.client.post(
+            self.url,
+            {
+                "hero": hero.pk,
+                "donation_id": donation.id,
+                "stripe_token": "tok_test",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(json.loads(response.content.decode())["success"])
+        modify_customer.assert_called_once_with("cus_owner", source="tok_test")
+
+    @patch("stripe.Customer.modify")
+    def test_update_card_of_another_hero_not_found(self, modify_customer):
+        owner = DjangoHero.objects.create(stripe_customer_id="cus_owner")
+        other = DjangoHero.objects.create(stripe_customer_id="cus_other")
+        donation = Donation.objects.create(donor=owner, stripe_customer_id="cus_owner")
+        response = self.client.post(
+            self.url,
+            {
+                "hero": other.pk,
+                "donation_id": donation.id,
+                "stripe_token": "tok_attacker",
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(modify_customer.called)
+
+    @patch("stripe.Customer.modify")
+    def test_update_card_without_hero_not_found(self, modify_customer):
+        hero = DjangoHero.objects.create(stripe_customer_id="cus_owner")
+        donation = Donation.objects.create(donor=hero, stripe_customer_id="cus_owner")
+        response = self.client.post(
+            self.url,
+            {"donation_id": donation.id, "stripe_token": "tok_attacker"},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(modify_customer.called)
+
+    @patch("stripe.Customer.modify")
+    def test_update_card_without_donation_id_not_found(self, modify_customer):
+        hero = DjangoHero.objects.create(stripe_customer_id="cus_owner")
+        Donation.objects.create(donor=hero, stripe_customer_id="cus_owner")
+        response = self.client.post(
+            self.url,
+            {"hero": hero.pk, "stripe_token": "tok_test"},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(modify_customer.called)
+
+    @patch("stripe.Customer.modify")
+    def test_update_card_without_stripe_token_not_found(self, modify_customer):
+        # A missing token is rejected before any hero/donation lookup, so the
+        # response is a 404 even when hero and donation_id are bogus.
+        response = self.client.post(
+            self.url,
+            {"hero": "nope", "donation_id": "nope"},
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(modify_customer.called)
+
+
 class TestThankYou(ReleaseMixin, TestCase):
     def setUp(self):
         self.url = reverse("fundraising:thank-you")
